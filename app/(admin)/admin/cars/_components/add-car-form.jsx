@@ -1,7 +1,7 @@
 "use client";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@radix-ui/react-tabs';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {z} from "zod";
 import {zodResolver} from "@hookform/resolvers/zod"
@@ -13,9 +13,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { useDropzone } from 'react-dropzone';
 import { toast } from 'sonner';
-import { Upload, X } from 'lucide-react';
+import { Loader2, Upload, X } from 'lucide-react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
+import useFetch from '@/hooks/use-fetch';
+import { addCar } from '@/actions/cars';
+import { useRouter} from 'next/navigation';
+
 // Predefined options
 const fuelTypes = ["Petrol", "Diesel", "Electric", "Hybrid", "Plug-in Hybrid"];
 const transmissions = ["Automatic", "Manual", "Semi-Automatic"];
@@ -31,14 +35,13 @@ const bodyTypes = [
 const carStatuses = ["AVAILABLE", "UNAVAILABLE", "SOLD"];
 
 
-
 const AddCarForm = () => {
- const [activeTab, setActiveTab] = useState("ai");
- const [uploadedImages, setUploadedImages] = useState([]);
- const [imageEror, setImageError] = useState("");
- const [isUploading, setIsUploading] = useState(false);
-// Define form schema with Zod
-const carFormSchema = z.object({
+  const [activeTab, setActiveTab] = useState("ai");
+  const [uploadedImages, setUploadedImages] = useState([]);
+  const [imageEror, setImageError] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  // Define form schema with Zod
+  const carFormSchema = z.object({
     make: z.string().min(1, "Make is required"),
     model: z.string().min(1, "Model is required"),
     year: z.string().refine((val) => {
@@ -56,8 +59,8 @@ const carFormSchema = z.object({
     status: z.enum(["AVAILABLE", "UNAVAILABLE", "SOLD"]),
     featured: z.boolean().default(false),
   });
-   // Initialize form with react-hook-form and zod
-   const {
+  // Initialize form with react-hook-form and zod
+  const {
     register,
     setValue,
     getValues,
@@ -82,12 +85,36 @@ const carFormSchema = z.object({
       featured: false,
     },
   });
+  
+  const { data:addCarResult, loading:addCarLoading, fn:addCarFn} = useFetch(addCar);
+  const router  = useRouter();
+  
+  useEffect(() => {
+    if(addCarResult?.success){
+      toast.success("Car Added Successfully");
+        router.push("/admin/cars ")
+    }
+  },[addCarResult])
 
   const onSubmit = async(data) => {
     if(uploadedImages.length === 0){
         setImageError("Please upload at least one image");
         return;
     }
+const carData = {
+    ...data,
+    year: parseInt(data.year),
+    price: parseFloat(data.price),
+    mileage: parseInt(data.mileage),
+    seats: data.seats ? parseInt(data.seats) : 0,
+};
+ await addCarFn({
+    carData,
+    images:uploadedImages,
+ })
+ console.log("Submitting Data: " ,carData);
+ 
+
   }
   const onMultiImageDrop = (acceptedFiles) => {
    const validFiles = acceptedFiles.filter((file) => {
@@ -104,7 +131,7 @@ const carFormSchema = z.object({
    validFiles.forEach((file) => {
     const reader = new FileReader();
         reader.onload = (e) => {
-          newImages.push(e.target.value);
+          newImages.push(e.target.result);
           if(newImages.length === validFiles.length){
             setUploadedImages((prev) => [...prev, ...newImages]);
             setImageError("");
@@ -120,6 +147,7 @@ const carFormSchema = z.object({
         reader.readAsDataURL(file);
     })
   };
+  console.log("Uploaded Images:", uploadedImages);
 
   const { getInputProps: getMultiImageRootProps, getRootProps: getMultiImageInputProps } =
     useDropzone({
@@ -130,6 +158,9 @@ const carFormSchema = z.object({
   multiple: true,
     });
 
+    const removeImage = (index) => {
+        setUploadedImages((prev) => prev.filter((_, i ) => i !== index));
+    }
   return (
     <div>
         <Tabs defaultValue='ai' className='mt-6' value={activeTab} onValueChange={setActiveTab}>
@@ -411,13 +442,16 @@ const carFormSchema = z.object({
                 {imageEror && (
                     <p className='text-xs text-red-500 mt-1'>{imageEror}</p>
                 )}
+                </div>
                 {uploadedImages.length > 0 &&(
-                    <div>
-                        <h3>Uploaded Images ({uploadedImages.length})</h3>
-                        <div>
+                    <div className='mt-4'>
+                        <h3 className='text-sm font-medium mb-2'>
+                            Uploaded Images ({uploadedImages.length})
+                            </h3>
+                        <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4'>
                             {uploadedImages.map((image,index) => {
-                                return (
-                                    <div>
+                                
+                                    <div key={index} className='relative group'>
                                         <Image
                                         src ={image}
                                         alt={`Car image ${index + 1}`}
@@ -425,23 +459,24 @@ const carFormSchema = z.object({
                                         weight={50}
                                         className='h-28 w-full object-cover rounded-md'
                                         priority
-
                                         />
-                                        <Button 
+                                        <Button
                                         type="button"
                                         size="icon"
                                         variant="destructive"
                                         className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        > <X/></Button>
+                                        onClick={() => removeImage(index)}
+                                        > 
+                                        <X className='h-3 w-3'/>r</Button>
                                     </div>
-                                )
+                            
                             })}
                         </div>
                     </div>
                 )}
-                </div>
-
+                    <Button type='submit' className="w-full md:w-auto" disabled={addCarLoading}>{addCarLoading ? <> <Loader2 className='mr-2 h-4 w-4 animate-spin' />Adding Car..</> : "Add Car"}</Button>              
                     </form>
+
                 </CardContent>
                 </CardHeader>
               </Card>

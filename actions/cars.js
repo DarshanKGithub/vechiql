@@ -135,6 +135,9 @@ export async function addCar({ carData, images }) {
     const user = await db.user.findUnique({
       where: { clerkUserId: userId },
     });
+    console.log("User fetched from DB:", user);
+    console.log("Images received:", images);
+    console.log("Car data before inserting:", carData);
 
     if (!user) throw new Error("User not found");
 
@@ -145,6 +148,7 @@ export async function addCar({ carData, images }) {
     // Initialize Supabase client for server-side operations
     const cookieStore = await cookies();
     const supabase = createClient(cookieStore);
+    console.log("Supabase client initialized:", supabase ? "Success" : "Failed");
 
     // Upload all images to Supabase storage
     const imageUrls = [];
@@ -170,6 +174,7 @@ export async function addCar({ carData, images }) {
       const fileName = `image-${Date.now()}-${i}.${fileExtension}`;
       const filePath = `${folderPath}/${fileName}`;
 
+      console.log("Uploading images:" , filePath);
       // Upload the file buffer directly
       const { data, error } = await supabase.storage
         .from("car-images")
@@ -181,6 +186,7 @@ export async function addCar({ carData, images }) {
         console.error("Error uploading image:", error);
         throw new Error(`Failed to upload image: ${error.message}`);
       }
+      console.log("Uploaded image successfully:", data)
 
       // Get the public URL for the uploaded file
       const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/car-images/${filePath}`; // disable cache in config
@@ -220,7 +226,8 @@ export async function addCar({ carData, images }) {
       success: true,
     };
   } catch (error) {
-    throw new Error("Error adding car:" + error.message);
+    throw new Error(`Error adding car: ${error?.message || error}`);
+
   }
 }
 
@@ -264,6 +271,8 @@ export async function getCars(search = "") {
 export async function deleteCar(id) {
   try {
     const { userId } = await auth();
+    console.log("Authenticated User ID:", userId);
+
     if (!userId) throw new Error("Unauthorized");
 
     // First, fetch the car to get its images
